@@ -80,7 +80,7 @@ app.post('/api/persons', (req, res)=>{
         ...data
     }
     persons.push(person)
-    res.status(200).end()
+    res.status(200).send(person)
 })
 const PORT = process.env.PORT || 3001
 app.listen(PORT, ()=>{
