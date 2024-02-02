@@ -25,33 +25,96 @@ app.get('/api/persons',(req,res)=>{
       })
 })
 
-app.post('/api/persons', (req, res)=>{
-    const data = req.body
-    if(!data.name || !data.number){
+app.post('/api/persons', async (req, res) => {
+    const data = req.body;
+
+    // Check if name or number is missing
+    if (!data.name || !data.number) {
         return res.status(400).json({
             error: "name or number is missing"
-        })
+        });
     }
-    const person = new Phonebook({
-        ...data
-    })
-    person.save().then(savedPerson =>{
-        res.json(savedPerson)
-    })
+
+    try {
+        // Check if person with the same name already exists
+        const existingPerson = await Phonebook.findOne({ name: data.name });
+
+        if (existingPerson) {
+            return res.status(400).json({
+                error: `${data.name} is already in the phonebook`
+            });
+        }
+
+        // If person doesn't exist, create and save new person
+        const person = new Phonebook(data);
+        const savedPerson = await person.save();
+        
+        res.json(savedPerson);
+    } catch (error) {
+        // Handle any errors that occur during database operations
+        console.error("Error:", error);
+        res.status(500).json({
+            error: "Internal server error"
+        });
+    }
 })
 
 app.get('/api/persons/:id', (req,res)=>{
     Phonebook.findById(req.params.id).then(person => {
-        res.json(person)
+        if(person){
+            res.json(person)
+        } else {
+            res.status(404).end()
+        }
+    })
+    .catch(error=>{
+        console.log(error)
+        res.status(400).send({error: "malformatted id"})
     })
 })
 
-app.delete('/api/persons/:id', (req, res)=>{
-    const id = req.params.id
-    Phonebook.deleteOne({id: req.params.id}).then(()=>{
-        res.status(200).end()
-    })
+app.delete('/api/persons/:id', (request, response, next) => {
+    Phonebook.findByIdAndDelete(request.params.id)
+      .then(result => {
+        response.status(204).end()
+      })
+      .catch(error => next(error))
 })
+
+app.put('/api/persons/:id', (request, response, next) => {
+    const body = request.body
+  
+    const person = {
+      name: body.name,
+      number: body.number,
+    }
+  
+    Phonebook.findByIdAndUpdate(request.params.id, person, { new: true })
+      .then(updatedPerson => {
+        response.json(updatedPerson)
+      })
+      .catch(error => next(error))
+})
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+  
+  // handler of requests with unknown endpoint
+app.use(unknownEndpoint)
+  
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+  
+    if (error.name === 'CastError') {
+      return response.status(400).send({ error: 'malformatted id' })
+    } 
+  
+    next(error)
+}
+  
+// this has to be the last loaded middleware.
+app.use(errorHandler)
 
 const PORT = process.env.PORT || 3001
 app.listen(PORT, ()=>{
